@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Code Review & Rewrite Agent 🤖</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        .panel {
+            background: white;
+            border: 2px solid #000;
+            border-radius: 12px;
+            height: calc(100vh - 140px);
+            overflow-y: auto;
+            transition: all 0.3s ease;
+        }
+
+        .panel.collapsed {
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .panel-toggle {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #ff5722;
+            color: white;
+            border: 2px solid #000;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 100;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-toggle:hover {
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .panel-toggle.hidden {
+            display: none;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            transition: grid-template-columns 0.3s ease;
+        }
+
+        .grid-container.full-width {
+            grid-template-columns: 1fr;
+        }
+
+        .dark-mode .panel {
+            background: #2a2a2a;
+            border-color: #444;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            border: 1.5px solid #000;
+        }
+
+        .dark-mode .badge {
+            border-color: #666;
+        }
+
+        .badge-critical {
+            background: #fee;
+            color: #c00;
+        }
+
+        .badge-high {
+            background: #ffe;
+            color: #c60;
+        }
+
+        .badge-medium {
+            background: #fef;
+            color: #90c;
+        }
+
+        .badge-low {
+            background: #eff;
+            color: #06c;
+        }
+
+        .btn-primary {
+            background: #ff5722;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            border: 2px solid #000;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            background: #e64a19;
+        }
+
+        .dark-mode .btn-primary {
+            border-color: #666;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            border: 2px solid #000;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .btn-secondary:hover {
+            background: #f0f0f0;
+        }
+
+        .dark-mode .btn-secondary {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border-color: #666;
+        }
+
+        .dark-mode .btn-secondary:hover {
+            background: #4a4a4a;
+        }
+
+        .input-field {
+            border: 2px solid #000;
+            border-radius: 8px;
+            padding: 10px;
+            transition: all 0.2s;
+            background: white;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #ff5722;
+            box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.1);
+        }
+
+        .dark-mode .input-field {
+            background: #3a3a3a;
+            border-color: #666;
+            color: #e0e0e0;
+        }
+
+        .issue-card {
+            background: #f8f9fa;
+            border: 2px solid #000;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.2s;
+        }
+
+        .issue-card:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark-mode .issue-card {
+            background: #3a3a3a;
+            border-color: #666;
+        }
+
+        pre {
+            background: #282c34;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border: 2px solid #000;
+            position: relative;
+        }
+
+        .dark-mode pre {
+            border-color: #666;
+        }
+
+        code {
+            font-size: 13px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #6b7280;
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.3;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #ff5722;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #e64a19;
+        }
+
+        .copy-btn.copied {
+            background: #4caf50;
+        }
+
+        .dark-mode-toggle {
+            background: white;
+            border: 2px solid #000;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .dark-mode .dark-mode-toggle {
+            background: #3a3a3a;
+            border-color: #666;
+        }
+
+        .dark-mode-toggle:hover {
+            transform: scale(1.1);
+        }
+
+        .line-numbers {
+            counter-reset: line;
+        }
+
+        .line-numbers code {
+            counter-increment: line;
+        }
+
+        .line-numbers code::before {
+            content: counter(line);
+            display: inline-block;
+            width: 2em;
+            padding-right: 1em;
+            margin-right: 1em;
+            text-align: right;
+            color: #6b7280;
+            border-right: 1px solid #444;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border: 2px solid #000;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .dark-mode .modal-content {
+            background: #2a2a2a;
+            border-color: #666;
+        }
+    </style>
+</head>
+
+<body class="p-6">
+    <!-- Header -->
+    <header class="max-w-full mx-auto mb-6">
+        <div class="flex items-center justify-between">
+            <h1 class="text-3xl font-bold flex items-center gap-3">
+                <i class="fas fa-robot text-orange-600"></i>
+                AI Code Review & Rewrite Agent
+            </h1>
+            <div class="flex gap-3 items-center">
+                <div class="dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">
+                    <i class="fas fa-moon" id="darkModeIcon"></i>
+                </div>
+                <button onclick="openSettings()" class="btn-secondary text-sm">
+                    <i class="fas fa-cog"></i>
+                    Settings
+                </button>
+                <button onclick="exportMarkdown()" class="btn-secondary text-sm">
+                    <i class="fas fa-download"></i>
+                    Export MD
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Panel Toggle Button -->
+    <div class="panel-toggle hidden" id="panelToggle" onclick="togglePanel()" title="Show Issues Panel">
+        <i class="fas fa-chevron-left"></i>
+    </div>
+
+    <div class="grid-container" id="gridContainer">
+        <!-- Left Panel: Code Input -->
+        <div class="panel p-6">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <i class="fas fa-code"></i>
+                Code Input
+            </h2>
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-2">Programming Language</label>
+                <select id="language" class="input-field w-full">
+                    <option value="Python">Python</option>
+                    <option value="JavaScript">JavaScript</option>
+                    <option value="Java">Java</option>
+                    <option value="C++">C++</option>
+                    <option value="Go">Go</option>
+                    <option value="TypeScript">TypeScript</option>
+                    <option value="Ruby">Ruby</option>
+                    <option value="PHP">PHP</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-2">Focus Areas</label>
+                <input type="text" id="focusAreas" value="Bugs, Security, Performance, Best Practices"
+                    class="input-field w-full" placeholder="e.g., Bugs, Security">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-semibold mb-2">Your Code</label>
+                <textarea id="codeInput" class="input-field w-full font-mono text-sm resize-none"
+                    style="height: calc(100vh - 480px);" placeholder="Paste your code here..."
+                    spellcheck="false"></textarea>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="reviewCode()" class="btn-primary flex-1">
+                    <i class="fas fa-search"></i>
+                    Analyze Code
+                </button>
+                <button onclick="rewriteCode()" class="btn-secondary flex-1">
+                    <i class="fas fa-wand-magic-sparkles"></i>
+                    Rewrite Code
+                </button>
+            </div>
+            <div id="loading" class="hidden mt-4 text-center">
+                <i class="fas fa-spinner fa-spin text-orange-600"></i>
+                <span class="ml-2 font-medium text-sm">Processing with Groq Llama 3.3 70B...</span>
+            </div>
+        </div>
+
+        <!-- Right Panel: Issues & Recommendations -->
+        <div class="panel p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <i class="fas fa-bug"></i>
+                    Issues & Recommendations
+                </h2>
+                <button onclick="clearResults()" id="clearBtn"
+                    class="hidden text-sm font-medium text-gray-600 hover:text-black">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+
+            <div id="outputArea">
+                <div class="empty-state">
+                    <i class="fas fa-clipboard-list"></i>
+                    <p class="font-medium">No analysis yet</p>
+                    <p class="text-sm">Paste your code and click "Analyze Code" to get started</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-bold flex items-center gap-2">
+                    <i class="fas fa-cog"></i>
+                    Custom Rules & Preferences
+                </h2>
+                <button onclick="closeSettings()" class="text-2xl hover:text-red-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-2">
+                        <i class="fas fa-shield-alt"></i>
+                        Custom Coding Standards
+                    </label>
+                    <textarea id="customRules" class="input-field w-full font-mono text-sm" rows="8" placeholder="Example:
+- Always use const/let instead of var
+- Functions must have JSDoc comments
+- No console.log in production code
+- Use async/await instead of .then()
+- Maximum function length: 50 lines"></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Define your team's coding standards, one rule per line</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold mb-2">
+                        <i class="fas fa-bookmark"></i>
+                        Preset Templates
+                    </label>
+                    <select id="ruleTemplate" class="input-field w-full" onchange="loadTemplate()">
+                        <option value="">-- Select a template --</option>
+                        <option value="react">React Best Practices</option>
+                        <option value="python">Python PEP 8</option>
+                        <option value="security">Security-First</option>
+                        <option value="performance">Performance-Optimized</option>
+                    </select>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button onclick="saveSettings()" class="btn-primary flex-1">
+                        <i class="fas fa-save"></i>
+                        Save Settings
+                    </button>
+                    <button onclick="resetSettings()" class="btn-secondary flex-1">
+                        <i class="fas fa-undo"></i>
+                        Reset to Default
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const outputArea = document.getElementById('outputArea');
+        const loading = document.getElementById('loading');
+        const clearBtn = document.getElementById('clearBtn');
+        const issuesPanel = document.getElementById('issuesPanel');
+        const panelToggle = document.getElementById('panelToggle');
+        const gridContainer = document.getElementById('gridContainer');
+        let currentAnalysis = '';
+
+        // Toggle Panel Visibility
+        function togglePanel() {
+            issuesPanel.classList.toggle('collapsed');
+            gridContainer.classList.toggle('full-width');
+            panelToggle.classList.toggle('hidden');
+        }
+
+        // Dark Mode
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const icon = document.getElementById('darkModeIcon');
+            if (document.body.classList.contains('dark-mode')) {
+                icon.className = 'fas fa-sun';
+                localStorage.setItem('darkMode', 'enabled');
+            } else {
+                icon.className = 'fas fa-moon';
+                localStorage.setItem('darkMode', 'disabled');
+            }
+        }
+
+        // Load dark mode preference
+        if (localStorage.getItem('darkMode') === 'enabled') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('darkModeIcon').className = 'fas fa-sun';
+        }
+
+        // Settings Modal Functions
+        const settingsModal = document.getElementById('settingsModal');
+        const customRulesInput = document.getElementById('customRules');
+        const ruleTemplateSelect = document.getElementById('ruleTemplate');
+
+        // Template presets
+        const templates = {
+            react: `- Use functional components with hooks instead of class components
+- Props must be validated with PropTypes or TypeScript
+- Use const for component declarations
+- Avoid inline styles, use CSS modules or styled-components
+- Extract reusable logic into custom hooks
+- Keep components under 200 lines`,
+            python: `- Follow PEP 8 style guide
+- Use type hints for function parameters and return values
+- Maximum line length: 88 characters (Black formatter)
+- Use list comprehensions where appropriate
+- Avoid mutable default arguments
+- Write docstrings for all public functions`,
+            security: `- Never hardcode credentials or API keys
+- Validate and sanitize all user inputs
+- Use parameterized queries to prevent SQL injection
+- Implement proper authentication and authorization
+- Use HTTPS for all external communications
+- Log security-relevant events`,
+            performance: `- Avoid nested loops where possible
+- Use caching for expensive operations
+- Minimize database queries (use batch operations)
+- Lazy load resources when appropriate
+- Use async/await for I/O operations
+- Profile code before optimizing`
+        };
+
+        function openSettings() {
+            settingsModal.classList.add('active');
+            loadSettings();
+        }
+
+        function closeSettings() {
+            settingsModal.classList.remove('active');
+        }
+
+        function loadTemplate() {
+            const template = ruleTemplateSelect.value;
+            if (template && templates[template]) {
+                customRulesInput.value = templates[template];
+            }
+        }
+
+        function saveSettings() {
+            const customRules = customRulesInput.value;
+            localStorage.setItem('customRules', customRules);
+            closeSettings();
+            alert('✅ Settings saved successfully!');
+        }
+
+        function loadSettings() {
+            const savedRules = localStorage.getItem('customRules');
+            if (savedRules) {
+                customRulesInput.value = savedRules;
+            }
+        }
+
+        function resetSettings() {
+            if (confirm('Are you sure you want to reset all custom rules?')) {
+                customRulesInput.value = '';
+                localStorage.removeItem('customRules');
+                ruleTemplateSelect.value = '';
+                alert('✅ Settings reset to default!');
+            }
+        }
+
+        // Close modal when clicking outside
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) {
+                closeSettings();
+            }
+        });
+
+        async function reviewCode() {
+            const code = document.getElementById('codeInput').value;
+            const language = document.getElementById('language').value;
+            const focusAreas = document.getElementById('focusAreas').value;
+            const customRules = localStorage.getItem('customRules') || '';
+
+            if (!code.trim()) {
+                alert("⚠️ Please enter some code first!");
+                return;
+            }
+
+            showLoading(true);
+            outputArea.innerHTML = '';
+            clearBtn.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, language, focus_areas: focusAreas, custom_rules: customRules })
+                });
+
+                if (!response.ok) throw new Error('API Request failed');
+
+                const data = await response.json();
+                currentAnalysis = data.review;
+                renderMarkdown(data.review);
+            } catch (error) {
+                outputArea.innerHTML = `
+                    <div class="issue-card" style="border-color: #c00; background: #fee;">
+                        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function rewriteCode() {
+            const code = document.getElementById('codeInput').value;
+            const language = document.getElementById('language').value;
+
+            if (!code.trim()) {
+                alert("⚠️ Please enter some code first!");
+                return;
+            }
+
+            showLoading(true);
+            outputArea.innerHTML = '';
+            clearBtn.classList.remove('hidden');
+
+            try {
+                const response = await fetch('/rewrite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, language })
+                });
+
+                if (!response.ok) throw new Error('API Request failed');
+
+                const data = await response.json();
+                currentAnalysis = data.rewritten_code;
+                outputArea.innerHTML = `
+                    <div class="mb-4">
+                        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+                            <i class="fas fa-check-circle text-green-600"></i>
+                            Optimized Code
+                        </h3>
+                    </div>
+                `;
+                renderMarkdown(data.rewritten_code);
+            } catch (error) {
+                outputArea.innerHTML = `
+                    <div class="issue-card" style="border-color: #c00; background: #fee;">
+                        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showLoading(show) {
+            loading.classList.toggle('hidden', !show);
+        }
+
+        function renderMarkdown(text) {
+            const html = marked.parse(text);
+            outputArea.innerHTML += html;
+            hljs.highlightAll();
+            addCopyButtons();
+        }
+
+        function addCopyButtons() {
+            const codeBlocks = outputArea.querySelectorAll('pre');
+            codeBlocks.forEach((block, index) => {
+                if (!block.querySelector('.copy-btn')) {
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                    btn.onclick = () => copyCode(block, btn);
+                    block.style.position = 'relative';
+                    block.appendChild(btn);
+                }
+            });
+        }
+
+        function copyCode(block, btn) {
+            const code = block.querySelector('code').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        function exportMarkdown() {
+            if (!currentAnalysis) {
+                alert("⚠️ No analysis to export. Please analyze some code first!");
+                return;
+            }
+
+            const blob = new Blob([currentAnalysis], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `code-analysis-${Date.now()}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearResults() {
+            outputArea.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-clipboard-list"></i>
+                    <p class="font-medium">No analysis yet</p>
+                    <p class="text-sm">Paste your code and click "Analyze Code" to get started</p>
+                </div>
+            `;
+            clearBtn.classList.add('hidden');
+            currentAnalysis = '';
+        }
+    </script>
+</body>
+
+</html>
