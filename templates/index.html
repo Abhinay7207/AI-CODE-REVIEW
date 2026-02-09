@@ -216,8 +216,11 @@
             overflow-x: auto;
             border: 1px solid rgba(255, 255, 255, 0.1);
             position: relative;
-            margin: 1rem 0;
+            margin: 1.5rem 0;
+            /* More space around blocks */
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            min-height: 50px;
+            /* Prevent collapsed blocks */
         }
 
         .dark-mode pre {
@@ -804,6 +807,11 @@
         }
 
         function renderMarkdown(text) {
+            // Configure marked for better GFM and line breaks
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
             const html = marked.parse(text);
             outputArea.innerHTML += html;
             hljs.highlightAll();

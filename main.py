@@ -102,11 +102,12 @@ Make sure to check the code against these custom rules and highlight any violati
     prompt = f"""
 You are an expert Senior Software Engineer. Provide a code review for this {request.language} code.
 
-**STRICT RULES**:
-1. Use bullet points for all explanations.
+**STRICT OUTPUT FORMATTING RULES**:
+1. Use bullet points (-) for all explanations.
 2. ALL code snippets MUST be in their own triple-backtick blocks.
-3. NEVER indent code blocks inside bullets. Keep them at the start of the line.
-4. Keep explanations brief (1-2 sentences).
+3. You MUST leave a BLANK LINE before and after every triple-backtick block.
+4. NEVER indent code blocks. They must start at the very beginning of the line.
+5. Keep explanations brief (1-2 sentences).
 
 Focus: {request.focus_areas}.
 {custom_rules_section}
@@ -114,7 +115,9 @@ Focus: {request.focus_areas}.
 ## Critical Issues (Bugs, Security)
 - **Issue**: [Description]
 - **Fix**: [Description]
-**Code Example**:
+
+**Fixed Code Example**:
+
 ```{request.language}
 [Fixed code snippet]
 ```
@@ -122,7 +125,9 @@ Focus: {request.focus_areas}.
 ## High Priority (Performance, Logic)
 - **Issue**: [Description]
 - **Recommendation**: [Description]
-**Code Example**:
+
+**Improved Code Example**:
+
 ```{request.language}
 [Improved code snippet]
 ```
@@ -137,7 +142,8 @@ Focus: {request.focus_areas}.
 ## Refactoring Suggestions
 - [Bullet points only]
 
-Code to review:
+**Original Code for Context**:
+
 ```{request.language}
 {request.code}
 ```
