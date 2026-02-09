@@ -100,48 +100,47 @@ Make sure to check the code against these custom rules and highlight any violati
 """
 
     prompt = f"""
-You are an expert Senior Software Engineer and Code Reviewer.
-Analyze the following {request.language} code and provide a structured, concise review.
-Focus on: {request.focus_areas}.
+You are an expert Senior Software Engineer. Provide a code review for this {request.language} code.
+
+**STRICT RULES**:
+1. Use bullet points for all explanations.
+2. ALL code snippets MUST be in their own triple-backtick blocks.
+3. NEVER indent code blocks inside bullets. Keep them at the start of the line.
+4. Keep explanations brief (1-2 sentences).
+
+Focus: {request.focus_areas}.
 {custom_rules_section}
 
-**IMPORTANT**: Keep descriptions brief (1-2 sentences max). Put code snippets in separate code blocks.
+## Critical Issues (Bugs, Security)
+- **Issue**: [Description]
+- **Fix**: [Description]
+**Code Example**:
+```{request.language}
+[Fixed code snippet]
+```
 
-## Critical Issues (Bugs, Security Vulnerabilities)
-- **Issue**: [One sentence description]
-  - **Location**: Line X or function name
-  - **Impact**: [Brief impact statement]
-  - **Fix**: [Concise fix description]
-  - **Code Example**:
-    ```{request.language}
-    [Fixed code snippet]
-    ```
+## High Priority (Performance, Logic)
+- **Issue**: [Description]
+- **Recommendation**: [Description]
+**Code Example**:
+```{request.language}
+[Improved code snippet]
+```
 
-## High Priority (Performance Issues, Logic Errors)
-- **Issue**: [One sentence description]
-  - **Problem**: [Brief problem statement]
-  - **Recommendation**: [Concise recommendation]
-  - **Code Example** (if applicable):
-    ```{request.language}
-    [Improved code snippet]
-    ```
+## Medium Priority (Best Practices)
+- **Issue**: [Description]
+- **Suggestion**: [Description]
 
-## Medium Priority (Best Practices, Code Style)
-- **Issue**: [One sentence description]
-  - **Better Approach**: [Concise suggestion]
-
-## Low Priority (Nitpicks, Comments)
-- [Brief bullet points only]
+## Low Priority (Formatting, Comments)
+- [Bullet points only]
 
 ## Refactoring Suggestions
-- [Brief bullet points with key improvements]
+- [Bullet points only]
 
 Code to review:
 ```{request.language}
 {request.code}
 ```
-
-Keep all descriptions concise and actionable.
 """
 
     try:
