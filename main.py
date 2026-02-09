@@ -214,3 +214,6 @@ Provide the complete rewritten code with explanations.
         return {"rewritten_code": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Vercel serverless handler
+handler = app

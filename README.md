@@ -56,6 +56,49 @@ http://localhost:8000
 4. Click "Create API Key"
 5. Copy and paste it into your `.env` file
 
+## 🚀 Deploying to Render
+
+### Step-by-Step Deployment:
+
+1. **Push your code to GitHub** (if not already done)
+   ```bash
+   git add .
+   git commit -m "Add Render deployment config"
+   git push origin main
+   ```
+
+2. **Create a Render Account**
+   - Go to [Render.com](https://render.com/)
+   - Sign up with your GitHub account
+
+3. **Create New Web Service**
+   - Click **"New +"** → **"Web Service"**
+   - Connect your GitHub repository: `AI-CODE-REVIEW`
+   - Click **"Connect"**
+
+4. **Configure the Service**
+   - **Name**: `ai-code-review` (or any name you prefer)
+   - **Region**: Choose closest to you
+   - **Branch**: `main`
+   - **Runtime**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+5. **Add Environment Variable**
+   - Scroll to **"Environment Variables"**
+   - Click **"Add Environment Variable"**
+   - **Key**: `GROQ_API_KEY`
+   - **Value**: Your Groq API key
+   - Click **"Save"**
+
+6. **Deploy**
+   - Click **"Create Web Service"**
+   - Wait 2-3 minutes for deployment
+   - Your app will be live at: `https://ai-code-review-xxxx.onrender.com`
+
+### Auto-Deploy on Git Push
+Once set up, Render automatically redeploys whenever you push to GitHub! 🎉
+
 ## 💡 Usage
 
 1. **Select Programming Language** - Choose from Python, JavaScript, Java, C++, Go, TypeScript, Ruby, or PHP

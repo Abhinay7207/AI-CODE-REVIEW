@@ -11,6 +11,7 @@
     <link rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -334,6 +335,51 @@
             background: #2a2a2a;
             border-color: #666;
         }
+
+        /* Upload Button Styles */
+        .input-wrapper {
+            position: relative;
+        }
+
+        .file-upload-btn {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            width: 32px;
+            height: 32px;
+            background: #fff;
+            border: 2px solid #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+            color: #000;
+        }
+
+        .file-upload-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark-mode .file-upload-btn {
+            background: #3a3a3a;
+            border-color: #666;
+            color: #e0e0e0;
+        }
+
+        .dark-mode .file-upload-btn:hover {
+            background: #4a4a4a;
+        }
+
+        #codeInput {
+            padding-left: 12px;
+            padding-bottom: 50px;
+            /* Make space for the button */
+        }
     </style>
 </head>
 
@@ -396,9 +442,19 @@
 
             <div class="mb-4">
                 <label class="block text-sm font-semibold mb-2">Your Code</label>
-                <textarea id="codeInput" class="input-field w-full font-mono text-sm resize-none"
-                    style="height: calc(100vh - 480px);" placeholder="Paste your code here..."
-                    spellcheck="false"></textarea>
+                <div class="input-wrapper">
+                    <textarea id="codeInput" class="input-field w-full font-mono text-sm resize-none"
+                        style="height: calc(100vh - 480px);" placeholder="Paste your code here..."
+                        spellcheck="false"></textarea>
+
+                    <button type="button" class="file-upload-btn" onclick="document.getElementById('fileInput').click()"
+                        title="Upload media or document">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <input type="file" id="fileInput" class="hidden"
+                        accept=".txt,.py,.js,.ts,.java,.cpp,.go,.rb,.php,.md,image/*"
+                        onchange="handleFileUpload(event)">
+                </div>
             </div>
 
             <div class="flex gap-3">
@@ -755,6 +811,71 @@
             clearBtn.classList.add('hidden');
             currentAnalysis = '';
         }
+
+        // File Upload Handling
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const codeInput = document.getElementById('codeInput');
+            const fileType = file.type;
+
+            showLoading(true);
+
+            if (fileType.startsWith('image/')) {
+                // Handle image with Tesseract OCR
+                try {
+                    const result = await Tesseract.recognize(file, 'eng', {
+                        logger: m => console.log(m)
+                    });
+                    codeInput.value += (codeInput.value ? '\n' : '') + result.data.text;
+                } catch (error) {
+                    alert('Error extracting text from image: ' + error.message);
+                }
+            } else {
+                // Handle text files
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    codeInput.value += (codeInput.value ? '\n' : '') + e.target.result;
+                };
+                reader.onerror = function () {
+                    alert('Error reading file');
+                };
+                reader.readAsText(file);
+            }
+
+            showLoading(false);
+            event.target.value = ''; // Reset file input
+        }
+
+        // Ctrl+V Paste Handling
+        document.getElementById('codeInput').addEventListener('paste', async (event) => {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+
+            for (let item of items) {
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    event.preventDefault(); // Prevent default paste of image
+                    const file = item.getAsFile();
+
+                    showLoading(true);
+                    try {
+                        const result = await Tesseract.recognize(file, 'eng');
+                        const codeInput = document.getElementById('codeInput');
+                        const start = codeInput.selectionStart;
+                        const end = codeInput.selectionEnd;
+                        const text = codeInput.value;
+                        const before = text.substring(0, start);
+                        const after = text.substring(end);
+
+                        codeInput.value = before + result.data.text + after;
+                    } catch (error) {
+                        console.error('Paste OCR Error:', error);
+                    } finally {
+                        showLoading(false);
+                    }
+                }
+            }
+        });
     </script>
 </body>
 
