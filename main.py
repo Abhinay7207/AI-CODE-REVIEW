@@ -147,7 +147,7 @@ Keep all descriptions concise and actionable.
     try:
         chat_completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are a helpful coding assistant."},
+                {"role": "system", "content": "You are a world-class Senior Software Engineer. You provide code reviews that are strictly formatted in Markdown. You MUST ensure all code examples are strictly wrapped in triple backtick code blocks with the correct language identifier. Never leave raw code outside of blocks."},
                 {"role": "user", "content": prompt}
             ],
             model=MODEL,
@@ -203,7 +203,7 @@ Provide the complete rewritten code with explanations.
     try:
         chat_completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "You are a helpful coding assistant. Output only code."},
+                {"role": "system", "content": "You are a production-focused Senior Software Engineer. Rewrite code to be extremely clean and efficient. Always wrap the final code in triple backticks."},
                 {"role": "user", "content": prompt}
             ],
             model=MODEL,
