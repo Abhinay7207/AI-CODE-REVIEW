@@ -1630,8 +1630,14 @@
         <p class="text-sm font-semibold mb-1">${item.language}</p>
         <p class="text-xs text-gray-500 truncate font-mono bg-gray-100 dark:bg-gray-800 p-1 rounded">
             ${item.code.substring(0, 50).replace(/</g, "&lt;" )}... </p>
+            <button onclick="restoreHistory('${item.id}'); event.stopPropagation();"
+                class="absolute top-2 right-8 text-blue-400 opacity-0 group-hover:opacity-100 hover:text-blue-600 transition-opacity p-1"
+                title="Open in Editor">
+                <i class="fas fa-folder-open"></i>
+            </button>
             <button onclick="deleteHistory(event, '${item.id}')"
-                class="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity p-1">
+                class="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity p-1"
+                title="Delete">
                 <i class="fas fa-trash"></i>
             </button>
     </div>
@@ -1643,12 +1649,20 @@
 
     async function deleteHistory(e, id) {
     e.stopPropagation(); // Prevent triggering restore
-    if (!confirm('Delete this item?')) return;
+    if(!confirm('Delete this item?')) return;
 
     try {
     await fetch(`/history/${id}`, { method: 'DELETE' });
+    // If the deleted item is the one shared, clear params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('share_id') === id) {
+    const url = new URL(window.location);
+    url.searchParams.delete('share_id');
+    window.history.pushState({}, '', url);
+    clearResults();
+    }
     loadHistory(); // Reload list
-    } catch (e) {
+    } catch(e) {
     alert('Failed to delete');
     }
     }
@@ -1666,6 +1680,8 @@
     // Restore output
     outputArea.innerHTML = '';
     clearBtn.classList.remove('hidden');
+    shareBtn.classList.remove('hidden'); // allow sharing restored items too
+    currentId = item.id;
 
     if (item.type === 'rewrite') {
     outputArea.innerHTML = `
