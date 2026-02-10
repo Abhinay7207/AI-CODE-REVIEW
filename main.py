@@ -1,5 +1,9 @@
 import os
 import re
+import json
+import uuid
+from datetime import datetime
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,6 +30,9 @@ MODEL = "llama-3.3-70b-versatile"
 TEMPERATURE = 0.7
 MAX_TOKENS = 4096
 
+# History Configuration
+HISTORY_FILE = "history.json"
+
 # Pydantic models for request body
 class ReviewRequest(BaseModel):
     code: str
@@ -37,8 +44,45 @@ class RewriteRequest(BaseModel):
     code: str
     language: str
 
-# Serve static files (css, js if we separate them later)
-# For now, we are serving index.html directly from root
+class HistoryItem(BaseModel):
+    id: str
+    timestamp: str
+    type: str  # "review" or "rewrite"
+    language: str
+    code: str
+    result: str
+    focus_areas: Optional[str] = None
+
+# --- Helper Functions ---
+
+def load_history() -> List[dict]:
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_history_item(item: dict):
+    history = load_history()
+    # Prepend new item
+    history.insert(0, item)
+    # Keep only last 15 items
+    if len(history) > 15:
+        history = history[:15]
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(history, f, indent=2)
+
+def parse_review_response(review_text: str):
+    """
+    Parses the LLM review response to categorize feedback.
+    This is a simplified regex parser as per requirements.
+    """
+    # Simply returns text for now as frontend handles markdown
+    return review_text
+
+# --- Routes ---
 
 # Templates
 templates = Jinja2Templates(directory="templates")
@@ -52,33 +96,28 @@ async def serve_tool(request: Request):
     """Serves the main tool page (index.html)."""
     return templates.TemplateResponse("index.html", {"request": request})
 
-def parse_review_response(review_text: str):
-    """
-    Parses the LLM review response to categorize feedback.
-    This is a simplified regex parser as per requirements.
-    """
-    categories = {
-        "Critical Issues": [],
-        "High Priority": [],
-        "Medium Priority": [],
-        "Low Priority": [],
-        "Suggestions": []
-    }
+@app.get("/history", response_model=List[HistoryItem])
+async def get_history():
+    """Returns the list of past reviews/rewrites."""
+    return load_history()
 
-    # Example regex logic - in a real scenario, we'd structure the LLM output better
-    # Here we just pass the raw text if parsing is too complex for simple regex
-    # But let's try to match sections
-    
-    # We will return the raw text for now as the frontend handles markdown rendering
-    # The requirement asks for regex parsing, let's look for headers
-    
-    # Check for "Critical"
-    if re.search(r"Critical", review_text, re.IGNORECASE):
-        # In a real app we would split by headers. 
-        # For this prototype, we will return the full markdown and let the frontend render it.
-        pass
-        
-    return review_text
+@app.get("/history/{item_id}", response_model=HistoryItem)
+async def get_history_item(item_id: str):
+    """Returns a specific history item by ID."""
+    history = load_history()
+    for item in history:
+        if item["id"] == item_id:
+            return item
+    raise HTTPException(status_code=404, detail="History item not found")
+
+@app.delete("/history/{item_id}")
+async def delete_history_item(item_id: str):
+    """Deletes a specific history item."""
+    history = load_history()
+    new_history = [item for item in history if item["id"] != item_id]
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(new_history, f, indent=2)
+    return {"message": "Item deleted"}
 
 @app.post("/review")
 async def review_code(request: ReviewRequest):
@@ -160,6 +199,22 @@ Focus: {request.focus_areas}.
             max_tokens=MAX_TOKENS,
         )
         response_text = chat_completion.choices[0].message.content
+        
+        # Save to history
+        try:
+            history_item = {
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "type": "review",
+                "language": request.language,
+                "code": request.code,
+                "result": response_text,
+                "focus_areas": request.focus_areas
+            }
+            save_history_item(history_item)
+        except Exception as e:
+            print(f"Failed to save history: {e}")
+            
         return {"review": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -216,6 +271,21 @@ Provide the complete rewritten code with explanations.
             max_tokens=MAX_TOKENS,
         )
         response_text = chat_completion.choices[0].message.content
+
+        # Save to history
+        try:
+            history_item = {
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.now().isoformat(),
+                "type": "rewrite",
+                "language": request.language,
+                "code": request.code,
+                "result": response_text
+            }
+            save_history_item(history_item)
+        except Exception as e:
+            print(f"Failed to save history: {e}")
+
         return {"rewritten_code": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

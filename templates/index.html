@@ -429,10 +429,76 @@
             background: #4a4a4a;
         }
 
+        /* History Panel Styles */
+        .history-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 350px;
+            background: white;
+            border-left: 2px solid #000;
+            z-index: 1001;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: -4px 0 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .history-panel.active {
+            transform: translateX(0);
+        }
+
+        .dark-mode .history-panel {
+            background: #2a2a2a;
+            border-color: #666;
+        }
+
+        .history-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .history-item:hover {
+            background: #f8f9fa;
+        }
+
+        .dark-mode .history-item {
+            border-color: #444;
+        }
+
+        .dark-mode .history-item:hover {
+            background: #3a3a3a;
+        }
+
         #codeInput {
             padding-left: 12px;
             padding-bottom: 50px;
             /* Make space for the button */
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 2000;
+        }
+
+        .toast.show {
+            opacity: 1;
         }
     </style>
 </head>
@@ -452,6 +518,10 @@
                 <button onclick="openSettings()" class="btn-secondary text-sm">
                     <i class="fas fa-cog"></i>
                     Settings
+                </button>
+                <button onclick="toggleHistory()" class="btn-secondary text-sm">
+                    <i class="fas fa-history"></i>
+                    History
                 </button>
                 <button onclick="exportMarkdown()" class="btn-secondary text-sm">
                     <i class="fas fa-download"></i>
@@ -534,9 +604,11 @@
                     <i class="fas fa-bug"></i>
                     Issues & Recommendations
                 </h2>
-                <button onclick="clearResults()" id="clearBtn"
-                    class="hidden text-sm font-medium text-gray-600 hover:text-black">
-                    <i class="fas fa-times"></i> Clear
+                <i class="fas fa-times"></i> Clear
+                </button>
+                <button onclick="shareAnalysis()" id="shareBtn"
+                    class="hidden text-sm font-medium text-orange-600 hover:text-orange-700 ml-3">
+                    <i class="fas fa-share-alt"></i> Share
                 </button>
             </div>
 
@@ -605,11 +677,31 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <!-- History Panel -->
+    <div class="history-panel" id="historyPanel">
+        <div
+            class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800">
+            <h3 class="font-bold text-lg"><i class="fas fa-history mr-2"></i>History</h3>
+            <button onclick="toggleHistory()" class="text-gray-500 hover:text-red-500">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="historyList" class="flex-1 overflow-y-auto p-2">
+            <!-- History items will be injected here -->
+            <div class="text-center text-gray-500 mt-10">
+                <i class="fas fa-spinner fa-spin text-2xl"></i>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
 
     <script>
         const outputArea = document.getElementById('outputArea');
         const loading = document.getElementById('loading');
         const clearBtn = document.getElementById('clearBtn');
+        const shareBtn = document.getElementById('shareBtn');
         const issuesPanel = document.getElementById('issuesPanel');
         const panelToggle = document.getElementById('panelToggle');
         const gridContainer = document.getElementById('gridContainer');
@@ -706,19 +798,47 @@
 
         function resetSettings() {
             if (confirm('Are you sure you want to reset all custom rules?')) {
-                customRulesInput.value = '';
                 localStorage.removeItem('customRules');
-                ruleTemplateSelect.value = '';
-                alert('✅ Settings reset to default!');
+                customRulesInput.value = '';
+                alert('Settings reset to default.');
             }
         }
 
-        // Close modal when clicking outside
-        settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) {
-                closeSettings();
+        // --- Core Logic ---
+
+        function showLoading(show) {
+            if (show) {
+                loading.classList.remove('hidden');
+                outputArea.classList.add('opacity-50');
+            } else {
+                loading.classList.add('hidden');
+                outputArea.classList.remove('opacity-50');
             }
-        });
+        }
+
+        function renderMarkdown(text) {
+            outputArea.innerHTML += marked.parse(text);
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+                // Add copy button
+                const pre = block.parentElement;
+                if (!pre.querySelector('.copy-btn')) {
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                    btn.onclick = () => {
+                        navigator.clipboard.writeText(block.innerText);
+                        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(() => {
+                            btn.innerHTML = '<i class="far fa-copy"></i> Copy';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    };
+                    pre.appendChild(btn);
+                }
+            });
+        }
 
         async function reviewCode() {
             const code = document.getElementById('codeInput').value;
@@ -727,13 +847,14 @@
             const customRules = localStorage.getItem('customRules') || '';
 
             if (!code.trim()) {
-                alert("⚠️ Please enter some code first!");
+                alert('Please enter some code first!');
                 return;
             }
 
             showLoading(true);
             outputArea.innerHTML = '';
             clearBtn.classList.remove('hidden');
+            shareBtn.classList.add('hidden');
 
             try {
                 const response = await fetch('/review', {
@@ -742,15 +863,25 @@
                     body: JSON.stringify({ code, language, focus_areas: focusAreas, custom_rules: customRules })
                 });
 
-                if (!response.ok) throw new Error('API Request failed');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
                 const data = await response.json();
                 currentAnalysis = data.review;
+
+                fetchLatestHistoryId();
+
                 renderMarkdown(data.review);
+                shareBtn.classList.remove('hidden');
             } catch (error) {
                 outputArea.innerHTML = `
                     <div class="issue-card" style="border-color: #c00; background: #fee;">
-                        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+                        <h3 class="font-bold text-red-700 flex items-center gap-2">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Error
+                        </h3>
+                        <p class="text-sm text-red-800 mt-2">${error.message}</p>
                     </div>
                 `;
             } finally {
@@ -763,13 +894,14 @@
             const language = document.getElementById('language').value;
 
             if (!code.trim()) {
-                alert("⚠️ Please enter some code first!");
+                alert('Please enter some code first!');
                 return;
             }
 
             showLoading(true);
             outputArea.innerHTML = '';
             clearBtn.classList.remove('hidden');
+            shareBtn.classList.add('hidden');
 
             try {
                 const response = await fetch('/rewrite', {
@@ -778,10 +910,13 @@
                     body: JSON.stringify({ code, language })
                 });
 
-                if (!response.ok) throw new Error('API Request failed');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
 
                 const data = await response.json();
-                currentAnalysis = data.rewritten_code;
+
+                // Add header for Rewrite
                 outputArea.innerHTML = `
                     <div class="mb-4">
                         <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
@@ -791,72 +926,21 @@
                     </div>
                 `;
                 renderMarkdown(data.rewritten_code);
+                fetchLatestHistoryId();
+                shareBtn.classList.remove('hidden');
             } catch (error) {
                 outputArea.innerHTML = `
                     <div class="issue-card" style="border-color: #c00; background: #fee;">
-                        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+                        <h3 class="font-bold text-red-700 flex items-center gap-2">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Error
+                        </h3>
+                        <p class="text-sm text-red-800 mt-2">${error.message}</p>
                     </div>
                 `;
             } finally {
                 showLoading(false);
             }
-        }
-
-        function showLoading(show) {
-            loading.classList.toggle('hidden', !show);
-        }
-
-        function renderMarkdown(text) {
-            // Configure marked for better GFM and line breaks
-            marked.setOptions({
-                breaks: true,
-                gfm: true
-            });
-            const html = marked.parse(text);
-            outputArea.innerHTML += html;
-            hljs.highlightAll();
-            addCopyButtons();
-        }
-
-        function addCopyButtons() {
-            const codeBlocks = outputArea.querySelectorAll('pre');
-            codeBlocks.forEach((block, index) => {
-                if (!block.querySelector('.copy-btn')) {
-                    const btn = document.createElement('button');
-                    btn.className = 'copy-btn';
-                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                    btn.onclick = () => copyCode(block, btn);
-                    block.style.position = 'relative';
-                    block.appendChild(btn);
-                }
-            });
-        }
-
-        function copyCode(block, btn) {
-            const code = block.querySelector('code').textContent;
-            navigator.clipboard.writeText(code).then(() => {
-                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                btn.classList.add('copied');
-                setTimeout(() => {
-                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                    btn.classList.remove('copied');
-                }, 2000);
-            });
-        }
-
-        function exportMarkdown() {
-            if (!currentAnalysis) {
-                alert("⚠️ No analysis to export. Please analyze some code first!");
-                return;
-            }
-
-            const blob = new Blob([currentAnalysis], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `code-analysis-${Date.now()}.md`;
-            a.click();
-            URL.revokeObjectURL(url);
         }
 
         function clearResults() {
@@ -868,74 +952,741 @@
                 </div>
             `;
             clearBtn.classList.add('hidden');
+            shareBtn.classList.add('hidden');
             currentAnalysis = '';
+            // Remove query param
+            const url = new URL(window.location);
+            url.searchParams.delete('share_id');
+            window.history.pushState({}, '', url);
+            currentId = null;
         }
+
+        // --- Share & Team Feature ---
+        let currentId = null;
+
+        async function fetchLatestHistoryId() {
+            // Helper to get the ID of the just-created item
+            try {
+                const res = await fetch('/history');
+                const items = await res.json();
+                if (items.length > 0) {
+                    currentId = items[0].id;
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function shareAnalysis() {
+            if (!currentId) {
+                alert("Please analyze code first.");
+                return;
+            }
+            const url = `${window.location.origin}/?share_id=${currentId}`;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast("Link Details copied to clipboard!");
+            });
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Check for share_id on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const shareId = urlParams.get('share_id');
+            if (shareId) {
+                showLoading(true);
+                try {
+                    const res = await fetch(`/history/${shareId}`);
+                    if (!res.ok) throw new Error('Shared analysis not found');
+                    const item = await res.json();
+
+                    // Restore state
+                    document.getElementById('codeInput').value = item.code;
+                    document.getElementById('language').value = item.language;
+
+                    outputArea.innerHTML = '';
+                    clearBtn.classList.remove('hidden');
+                    shareBtn.classList.remove('hidden');
+                    currentId = item.id;
+
+                    let headerHtml = '';
+                    if (item.type === 'rewrite') {
+                        headerHtml = `
+                            <div class="mb-4">
+                                <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-600"></i>
+                                    Optimized Code (Shared)
+                                </h3>
+                            </div>
+                        `;
+                    } else {
+                        headerHtml = `
+                            <div class="mb-4">
+                                <span class="badge badge-medium">Shared Analysis</span>
+                            </div>
+                        `;
+                    }
+                    outputArea.innerHTML = headerHtml;
+                    renderMarkdown(item.result);
+
+                } catch (e) {
+                    outputArea.innerHTML = `<div class="p-4 text-red-500">❌ Error loading shared analysis: ${e.message}</div>`;
+                } finally {
+                    showLoading(false);
+                }
+            }
+        });
 
         // File Upload Handling
         async function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
-            const codeInput = document.getElementById('codeInput');
-            const fileType = file.type;
+            // Handle images with Tesseract.js
+            if (file.type.startsWith('image/')) {
+                const codeInput = document.getElementById('codeInput');
+                const originalPlaceholder = codeInput.placeholder;
+                codeInput.value = '';
+                codeInput.placeholder = 'Extracting text from image... please wait...';
 
-            showLoading(true);
-
-            if (fileType.startsWith('image/')) {
-                // Handle image with Tesseract OCR
                 try {
-                    const result = await Tesseract.recognize(file, 'eng', {
-                        logger: m => console.log(m)
-                    });
-                    codeInput.value += (codeInput.value ? '\n' : '') + result.data.text;
-                } catch (error) {
-                    alert('Error extracting text from image: ' + error.message);
+                    const result = await Tesseract.recognize(file, 'eng');
+                    codeInput.value = result.data.text;
+                } catch (err) {
+                    alert('Error extracting text: ' + err.message);
+                } finally {
+                    codeInput.placeholder = originalPlaceholder;
                 }
-            } else {
-                // Handle text files
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    codeInput.value += (codeInput.value ? '\n' : '') + e.target.result;
-                };
-                reader.onerror = function () {
-                    alert('Error reading file');
-                };
-                reader.readAsText(file);
+                return;
             }
 
-            showLoading(false);
-            event.target.value = ''; // Reset file input
+            // Handle text files
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                document.getElementById('codeInput').value = e.target.result;
+            };
+            reader.readAsText(file);
         }
 
-        // Ctrl+V Paste Handling
-        document.getElementById('codeInput').addEventListener('paste', async (event) => {
-            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+        // --- History Feature Logic ---
+        const historyPanel = document.getElementById('historyPanel');
+        const historyList = document.getElementById('historyList');
 
-            for (let item of items) {
-                if (item.kind === 'file' && item.type.startsWith('image/')) {
-                    event.preventDefault(); // Prevent default paste of image
-                    const file = item.getAsFile();
-
-                    showLoading(true);
-                    try {
-                        const result = await Tesseract.recognize(file, 'eng');
-                        const codeInput = document.getElementById('codeInput');
-                        const start = codeInput.selectionStart;
-                        const end = codeInput.selectionEnd;
-                        const text = codeInput.value;
-                        const before = text.substring(0, start);
-                        const after = text.substring(end);
-
-                        codeInput.value = before + result.data.text + after;
-                    } catch (error) {
-                        console.error('Paste OCR Error:', error);
-                    } finally {
-                        showLoading(false);
-                    }
-                }
+        function toggleHistory() {
+            historyPanel.classList.toggle('active');
+            if (historyPanel.classList.contains('active')) {
+                loadHistory();
             }
-        });
+        }
+
+        async function loadHistory() {
+            historyList.innerHTML = '<div class="text-center text-gray-500 mt-10"><i class="fas fa-spinner fa-spin text-2xl"></i><p>Loading...</p></div>';
+            try {
+                const res = await fetch('/history');
+                const items = await res.json();
+                renderHistory(items);
+            } catch (e) {
+                historyList.innerHTML = `<p class="text-red-500 text-center p-4">Failed to load history: ${e.message}</p>`;
+            }
+        }
+
+        function renderHistory(items) {
+            if (!items.length) {
+                historyList.innerHTML = '<p class="text-center text-gray-500 p-4">No history yet.</p>';
+                return;
+            }
+
+            historyList.innerHTML = items.map(item => `
+                <div class="history-item group relative" onclick="restoreHistory('${item.id}')">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="badge ${item.type === 'review' ? 'badge-low' : 'badge-high'}">
+                            ${item.type.toUpperCase()}
+                        </span>
+                        <span class="text-xs text-gray-500">${new Date(item.timestamp).toLocaleString()}</span>
+                    </div>
+                    <p class="text-sm font-semibold mb-1">${item.language}</p>
+                    <p class="text-xs text-gray-500 truncate font-mono bg-gray-100 dark:bg-gray-800 p-1 rounded">
+                        ${item.code.substring(0, 50).replace(/</g, "&lt;")}...
+                    </p>
+                    <button onclick="deleteHistory(event, '${item.id}')" 
+                        class="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity p-1">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `).join('');
+
+            // Store items globally to restore later
+            window.historyItems = items;
+        }
+
+        async function deleteHistory(e, id) {
+            e.stopPropagation(); // Prevent triggering restore
+            if (!confirm('Delete this item?')) return;
+
+            try {
+                await fetch(`/history/${id}`, { method: 'DELETE' });
+                // If the deleted item is the one shared, clear params
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('share_id') === id) {
+                    const url = new URL(window.location);
+                    url.searchParams.delete('share_id');
+                    window.history.pushState({}, '', url);
+                    clearResults();
+                }
+                loadHistory(); // Reload list
+            } catch (e) {
+                alert('Failed to delete');
+            }
+        }
+
+        function restoreHistory(id) {
+            const item = window.historyItems.find(i => i.id === id);
+            if (!item) return;
+
+            document.getElementById('codeInput').value = item.code;
+            document.getElementById('language').value = item.language;
+            if (item.focus_areas && document.getElementById('focusAreas')) {
+                document.getElementById('focusAreas').value = item.focus_areas;
+            }
+
+            // Restore output
+            outputArea.innerHTML = '';
+            clearBtn.classList.remove('hidden');
+            shareBtn.classList.remove('hidden'); // allow sharing restored items too
+            currentId = item.id;
+
+            if (item.type === 'rewrite') {
+                outputArea.innerHTML = `
+                    <div class="mb-4">
+                        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+                            <i class="fas fa-check-circle text-green-600"></i>
+                            Optimized Code (Restored)
+                        </h3>
+                    </div>
+                `;
+            } else {
+                outputArea.innerHTML = `
+                    <div class="mb-4">
+                        <span class="badge badge-low">Restored from History</span>
+                    </div>
+                `;
+            }
+            renderMarkdown(item.result);
+
+            // Close panel on mobile/small screens or just to be nice
+            if (window.innerWidth < 768) toggleHistory();
+        }
     </script>
+    customRulesInput.value = '';
+    localStorage.removeItem('customRules');
+    ruleTemplateSelect.value = '';
+    alert('✅ Settings reset to default!');
+    }
+    }
+
+    // Close modal when clicking outside
+    settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) {
+    closeSettings();
+    }
+    });
+
+    async function reviewCode() {
+    const code = document.getElementById('codeInput').value;
+    const language = document.getElementById('language').value;
+    const focusAreas = document.getElementById('focusAreas').value;
+    const customRules = localStorage.getItem('customRules') || '';
+
+    if (!code.trim()) {
+    alert("⚠️ Please enter some code first!");
+    return;
+    }
+
+    showLoading(true);
+    outputArea.innerHTML = '';
+    clearBtn.classList.remove('hidden');
+
+    try {
+    const response = await fetch('/review', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, language, focus_areas: focusAreas, custom_rules: customRules })
+    });
+
+    if (!response.ok) throw new Error('API Request failed');
+
+    const data = await response.json();
+    currentAnalysis = data.review;
+    currentId = null; // New analysis, ID will be in history but not returned by API yet.
+    // Ideally API should return ID. For now, Share will only work after reloading history.
+    // WAIT, let's just create a temporary ID or fetch history to get the latest one?
+    // Better: Update API to return ID, but for now we can just fetch history silently.
+    fetchLatestHistoryId();
+
+    renderMarkdown(data.review);
+    shareBtn.classList.remove('hidden');
+    } catch (error) {
+    outputArea.innerHTML = `
+    <div class="issue-card" style="border-color: #c00; background: #fee;">
+        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+    </div>
+    `;
+    } finally {
+    showLoading(false);
+    }
+    }
+
+    async function rewriteCode() {
+    const code = document.getElementById('codeInput').value;
+    const language = document.getElementById('language').value;
+
+    if (!code.trim()) {
+    alert("⚠️ Please enter some code first!");
+    return;
+    }
+
+    showLoading(true);
+    outputArea.innerHTML = '';
+    clearBtn.classList.remove('hidden');
+
+    try {
+    const response = await fetch('/rewrite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, language })
+    });
+
+    if (!response.ok) throw new Error('API Request failed');
+
+    const data = await response.json();
+    currentAnalysis = data.rewritten_code;
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <i class="fas fa-check-circle text-green-600"></i>
+            Optimized Code
+        </h3>
+    </div>
+    `;
+    renderMarkdown(data.rewritten_code);
+    fetchLatestHistoryId();
+    shareBtn.classList.remove('hidden');
+    } catch (error) {
+    outputArea.innerHTML = `
+    <div class="issue-card" style="border-color: #c00; background: #fee;">
+        <p class="font-semibold text-red-700">❌ Error: ${error.message}</p>
+    </div>
+    `;
+    } finally {
+    showLoading(false);
+    }
+    }
+
+    function showLoading(show) {
+    loading.classList.toggle('hidden', !show);
+    }
+
+    function renderMarkdown(text) {
+    // Configure marked for better GFM and line breaks
+    marked.setOptions({
+    breaks: true,
+    gfm: true
+    });
+    const html = marked.parse(text);
+    outputArea.innerHTML += html;
+    hljs.highlightAll();
+    addCopyButtons();
+    }
+
+    function addCopyButtons() {
+    const codeBlocks = outputArea.querySelectorAll('pre');
+    codeBlocks.forEach((block, index) => {
+    if (!block.querySelector('.copy-btn')) {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+    btn.onclick = () => copyCode(block, btn);
+    block.style.position = 'relative';
+    block.appendChild(btn);
+    }
+    });
+    }
+
+    function copyCode(block, btn) {
+    const code = block.querySelector('code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+    btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+    btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+    btn.classList.remove('copied');
+    }, 2000);
+    });
+    }
+
+    function exportMarkdown() {
+    if (!currentAnalysis) {
+    alert("⚠️ No analysis to export. Please analyze some code first!");
+    return;
+    }
+
+    const blob = new Blob([currentAnalysis], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `code-analysis-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    }
+
+    function clearResults() {
+    outputArea.innerHTML = `
+    <div class="empty-state">
+        <i class="fas fa-clipboard-list"></i>
+        <p class="font-medium">No analysis yet</p>
+        <p class="text-sm">Paste your code and click "Analyze Code" to get started</p>
+    </div>
+    `;
+    clearBtn.classList.add('hidden');
+    shareBtn.classList.add('hidden');
+    currentAnalysis = '';
+    // Remove query param without reload
+    window.history.pushState({}, document.title, window.location.pathname);
+    }
+
+    // --- Share & Team Feature ---
+    let currentId = null;
+
+    async function fetchLatestHistoryId() {
+    // Helper to get the ID of the just-created item
+    try {
+    const res = await fetch('/history');
+    const items = await res.json();
+    if (items.length > 0) {
+    currentId = items[0].id;
+    }
+    } catch (e) { console.error(e); }
+    }
+
+    function shareAnalysis() {
+    if (!currentId) {
+    alert("Please analyze code first.");
+    return;
+    }
+    const url = `${window.location.origin}/?share_id=${currentId}`;
+    navigator.clipboard.writeText(url).then(() => {
+    showToast("Link Details copied to clipboard!");
+    });
+    }
+
+    function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Check for share_id on load
+    window.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share_id');
+    if (shareId) {
+    showLoading(true);
+    try {
+    const res = await fetch(`/history/${shareId}`);
+    if (!res.ok) throw new Error('Shared analysis not found');
+    const item = await res.json();
+
+    // Restore state
+    document.getElementById('codeInput').value = item.code;
+    document.getElementById('language').value = item.language;
+
+    outputArea.innerHTML = '';
+    clearBtn.classList.remove('hidden');
+    shareBtn.classList.remove('hidden');
+    currentId = item.id;
+
+    if (item.type === 'rewrite') {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <i class="fas fa-check-circle text-green-600"></i>
+            Optimized Code (Shared)
+        </h3>
+    </div>
+    `;
+    } else {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <span class="badge badge-medium">Shared Analysis</span>
+    </div>
+    `;
+    }
+    renderMarkdown(item.result);
+
+    } catch (e) {
+    outputArea.innerHTML = `<div class="p-4 text-red-500">❌ Error loading shared analysis: ${e.message}</div>`;
+    } finally {
+    showLoading(false);
+    }
+    }
+    });
+
+    clearBtn.classList.add('hidden');
+    shareBtn.classList.add('hidden');
+    currentAnalysis = '';
+    // Remove query param without reload
+    window.history.pushState({}, document.title, window.location.pathname);
+    }
+
+    // --- Share & Team Feature ---
+    let currentId = null;
+
+    async function fetchLatestHistoryId() {
+    // Helper to get the ID of the just-created item
+    try {
+    const res = await fetch('/history');
+    const items = await res.json();
+    if (items.length > 0 && items[0].type === 'review') {
+    // Make sure we get the right one
+    currentId = items[0].id;
+    } else if (items.length > 0) {
+    currentId = items[0].id;
+    }
+    } catch (e) { console.error(e); }
+    }
+
+    function shareAnalysis() {
+    if (!currentId) {
+    alert("Please analyze code first.");
+    return;
+    }
+    const url = `${window.location.origin}/?share_id=${currentId}`;
+    navigator.clipboard.writeText(url).then(() => {
+    showToast("Link Details copied to clipboard!");
+    });
+    }
+
+    function showToast(msg) {
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Check for share_id on load
+    window.addEventListener('DOMContentLoaded', async () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share_id');
+    if (shareId) {
+    showLoading(true);
+    try {
+    const res = await fetch(`/history/${shareId}`);
+    if (!res.ok) throw new Error('Shared analysis not found');
+    const item = await res.json();
+
+    // Restore state
+    document.getElementById('codeInput').value = item.code;
+    document.getElementById('language').value = item.language;
+
+    outputArea.innerHTML = '';
+    clearBtn.classList.remove('hidden');
+    shareBtn.classList.remove('hidden');
+    currentId = item.id;
+
+    if (item.type === 'rewrite') {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <i class="fas fa-check-circle text-green-600"></i>
+            Optimized Code (Shared)
+        </h3>
+    </div>
+    `;
+    } else {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <span class="badge badge-medium">Shared Analysis</span>
+    </div>
+    `;
+    }
+    renderMarkdown(item.result);
+
+    } catch (e) {
+    outputArea.innerHTML = `<div class="p-4 text-red-500">❌ Error loading shared analysis: ${e.message}</div>`;
+    } finally {
+    showLoading(false);
+    }
+    }
+    });
+
+    // File Upload Handling
+    async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const codeInput = document.getElementById('codeInput');
+    const fileType = file.type;
+
+    showLoading(true);
+
+    if (fileType.startsWith('image/')) {
+    // Handle image with Tesseract OCR
+    try {
+    const result = await Tesseract.recognize(file, 'eng', {
+    logger: m => console.log(m)
+    });
+    codeInput.value += (codeInput.value ? '\n' : '') + result.data.text;
+    } catch (error) {
+    alert('Error extracting text from image: ' + error.message);
+    }
+    } else {
+    // Handle text files
+    const reader = new FileReader();
+    reader.onload = function (e) {
+    codeInput.value += (codeInput.value ? '\n' : '') + e.target.result;
+    };
+    reader.onerror = function () {
+    alert('Error reading file');
+    };
+    reader.readAsText(file);
+    }
+
+    showLoading(false);
+    event.target.value = ''; // Reset file input
+    }
+
+    // Ctrl+V Paste Handling
+    document.getElementById('codeInput').addEventListener('paste', async (event) => {
+    const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+
+    for (let item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+    event.preventDefault(); // Prevent default paste of image
+    const file = item.getAsFile();
+
+    showLoading(true);
+    try {
+    const result = await Tesseract.recognize(file, 'eng');
+    const codeInput = document.getElementById('codeInput');
+    const start = codeInput.selectionStart;
+    const end = codeInput.selectionEnd;
+    const text = codeInput.value;
+    const before = text.substring(0, start);
+    const after = text.substring(end);
+
+    codeInput.value = before + result.data.text + after;
+    } catch (error) {
+    console.error('Paste OCR Error:', error);
+    } finally {
+    showLoading(false);
+    }
+    }
+    }
+    });
+    // --- History Feature Logic ---
+    const historyPanel = document.getElementById('historyPanel');
+    const historyList = document.getElementById('historyList');
+
+    function toggleHistory() {
+    historyPanel.classList.toggle('active');
+    if (historyPanel.classList.contains('active')) {
+    loadHistory();
+    }
+    }
+
+    async function loadHistory() {
+    historyList.innerHTML = '<div class="text-center text-gray-500 mt-10"><i
+            class="fas fa-spinner fa-spin text-2xl"></i>
+        <p>Loading...</p>
+    </div>';
+    try {
+    const res = await fetch('/history');
+    const items = await res.json();
+    renderHistory(items);
+    } catch (e) {
+    historyList.innerHTML = `<p class="text-red-500 text-center p-4">Failed to load history: ${e.message}</p>`;
+    }
+    }
+
+    function renderHistory(items) {
+    if (!items.length) {
+    historyList.innerHTML = '<p class="text-center text-gray-500 p-4">No history yet.</p>';
+    return;
+    }
+
+    historyList.innerHTML = items.map(item => `
+    <div class="history-item group relative" onclick="restoreHistory('${item.id}')">
+        <div class="flex justify-between items-start mb-1">
+            <span class="badge ${item.type === 'review' ? 'badge-low' : 'badge-high'}">
+                ${item.type.toUpperCase()}
+            </span>
+            <span class="text-xs text-gray-500">${new Date(item.timestamp).toLocaleString()}</span>
+        </div>
+        <p class="text-sm font-semibold mb-1">${item.language}</p>
+        <p class="text-xs text-gray-500 truncate font-mono bg-gray-100 dark:bg-gray-800 p-1 rounded">
+            ${item.code.substring(0, 50).replace(/</g, "&lt;" )}... </p>
+            <button onclick="deleteHistory(event, '${item.id}')"
+                class="absolute top-2 right-2 text-red-400 opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity p-1">
+                <i class="fas fa-trash"></i>
+            </button>
+    </div>
+    `).join('');
+
+    // Store items globally to restore later
+    window.historyItems = items;
+    }
+
+    async function deleteHistory(e, id) {
+    e.stopPropagation(); // Prevent triggering restore
+    if (!confirm('Delete this item?')) return;
+
+    try {
+    await fetch(`/history/${id}`, { method: 'DELETE' });
+    loadHistory(); // Reload list
+    } catch (e) {
+    alert('Failed to delete');
+    }
+    }
+
+    function restoreHistory(id) {
+    const item = window.historyItems.find(i => i.id === id);
+    if (!item) return;
+
+    document.getElementById('codeInput').value = item.code;
+    document.getElementById('language').value = item.language;
+    if (item.focus_areas && document.getElementById('focusAreas')) {
+    document.getElementById('focusAreas').value = item.focus_areas;
+    }
+
+    // Restore output
+    outputArea.innerHTML = '';
+    clearBtn.classList.remove('hidden');
+
+    if (item.type === 'rewrite') {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <i class="fas fa-check-circle text-green-600"></i>
+            Optimized Code (Restored)
+        </h3>
+    </div>
+    `;
+    } else {
+    outputArea.innerHTML = `
+    <div class="mb-4">
+        <span class="badge badge-low">Restored from History</span>
+    </div>
+    `;
+    }
+    renderMarkdown(item.result);
+
+    // Close panel on mobile/small screens or just to be nice
+    if (window.innerWidth < 768) toggleHistory(); } </script>
 </body>
 
 </html>
