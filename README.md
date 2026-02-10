@@ -133,10 +133,16 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 This project is open source and available under the MIT License.
 
-## 👨‍💻 Author
+## 👥 Team & Contributors
 
-**Abhinay Tiwari**
+**Abhinay Tiwari** 
 - GitHub: [@Abhinay7207](https://github.com/Abhinay7207)
+
+**Harsh Anand** (Lead)
+
+**Taruna Singh**
+
+**Daksh Bhati**
 
 ## 🙏 Acknowledgments
 
